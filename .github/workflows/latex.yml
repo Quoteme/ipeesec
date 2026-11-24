@@ -1,0 +1,84 @@
+name: Build and publish PDF
+
+on:
+  push:
+    branches: [master]
+    paths:
+      - "latex/**"
+      - ".github/workflows/latex.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one deployment at a time, but never cancel one that is in progress.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build ipeesec.pdf
+        uses: xu-cheng/texlive-action@v3
+        with:
+          scheme: full
+          os: debian
+          run: |
+            set -euo pipefail
+            # minted needs Python, imports.tex needs the Symbola font
+            # (JuliaMono and TeX Gyre Pagella ship with TeX Live).
+            apt-get update
+            apt-get install -y --no-install-recommends python3 fontconfig fonts-symbola
+            # Make the fonts shipped with TeX Live visible to XeTeX via fontconfig
+            # (the Docker image may already link this file, then nothing to do).
+            if [ ! -e /etc/fonts/conf.d/09-texlive.conf ]; then
+              cp "$(kpsewhich -var-value TEXMFSYSVAR)/fonts/conf/texlive-fontconfig.conf" \
+                /etc/fonts/conf.d/09-texlive.conf
+            fi
+            fc-cache -f
+            cd latex
+            latexmk ipeesec.tex
+
+      # The PDF of every run, downloadable from the run's summary page.
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ipeesec-pdf
+          path: latex/ipeesec.pdf
+
+      - name: Assemble site
+        run: |
+          mkdir -p _site
+          cp latex/ipeesec.pdf _site/
+          cat > _site/index.html <<'HTML'
+          <!DOCTYPE html>
+          <html lang="en">
+            <head>
+              <meta charset="utf-8">
+              <title>iPeeSec - a formally correct IPsec implementation</title>
+              <meta http-equiv="refresh" content="0; url=ipeesec.pdf">
+            </head>
+            <body>
+              <p><a href="ipeesec.pdf">iPeeSec - a formally correct IPsec implementation (PDF)</a></p>
+            </body>
+          </html>
+          HTML
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

@@ -1,0 +1,62 @@
+% !TEX root = ../ipeesec.tex
+\section{Introduction}\label{sec:introduction}
+
+Multiple ways exist to construct an encrypted tunnel between networks.
+Common options are WireGuard~\cite{donenfeldWireGuard2017}, OpenVPN~\cite{openvpn} and IPsec~\cite{rfc4301}, where the last is the IETF standard and the oldest of them.
+Through XFRM this protocol suite is implemented in the Linux kernel, and most routers, firewalls and operating systems support it.
+In this paper, we wish to implement parts of this protocol using sheaf and type theory and formalize these findings as a Lean~4 implementation.
+
+\Cref{fig:ipsec-overview} shows, on an abstract level, how two hosts set up and use an IPsec tunnel.
+First, the \IKE{} protocol~\cite{rfc7296} runs in two exchanges.
+In \texttt{IKE\_SA\_INIT} the initiator (client) and the responder (server) agree on cryptographic algorithms and perform a Diffie--Hellman key exchange. Both then derive the same keys, which form the \emph{IKE security association} (IKE~SA).
+In \texttt{IKE\_AUTH}, already protected by these keys, both peers authenticate each other and negotiate a \emph{child SA}, consisting of the keys, algorithms and traffic selectors for the actual data traffic.
+Each peer stores the child SA, one per direction and identified by its \SPI{}, in its security association database (\SAD{}).
+Afterwards, every IP packet matched by the security policy database (\SPD{}) is encrypted and authenticated with \ESP{}~\cite{rfc4303} and sent through the tunnel.
+
+\begin{figure}[htbp]
+	\centering
+	\begin{tikzpicture}[
+			>=Stealth, font=\small,
+			peer/.style={draw, thick, rounded corners=3pt, minimum width=2.6cm,
+					minimum height=0.8cm},
+			plain/.style={->, thin},
+			ike/.style={->, thick},
+			esp/.style={->, very thick, double, double distance=1.2pt},
+			msg/.style={above, font=\footnotesize, inner sep=2pt},
+			state/.style={draw, fill=white, rounded corners=2pt, font=\footnotesize,
+					inner sep=3pt},
+			phase/.style={decorate, decoration={brace, amplitude=5pt}, thick},
+			phaselabel/.style={right, font=\footnotesize, xshift=6pt},
+		]
+		\def\R{8}      % x-position of the server
+		\def\B{-6.6}   % y-position where the lifelines end
+
+		% peers and lifelines
+		\node[peer] (C) at (0, 0)  {Client};
+		\node[peer] (S) at (\R, 0) {Server};
+		\draw[densely dashed] (C.south) -- (0, \B);
+		\draw[densely dashed] (S.south) -- (\R, \B);
+
+		% 1. key exchange (unencrypted)
+		\draw[plain] (0, -1.1) -- node[msg] {algorithms, key share} (\R, -1.1);
+		\draw[plain] (\R, -1.8) -- node[msg] {algorithms, key share} (0, -1.8);
+		\node[state] at (\R/2, -2.4) {both derive a shared key};
+
+		% 2. authentication (encrypted with the shared key)
+		\draw[ike] (0, -3.3) -- node[msg] {identity, proof} (\R, -3.3);
+		\draw[ike] (\R, -4.0) -- node[msg] {identity, proof} (0, -4.0);
+
+		% 3. data transfer through the tunnel
+		\draw[esp] (0, -5.0) -- node[msg, yshift=2pt] {encrypted packet} (\R, -5.0);
+		\draw[esp] (\R, -5.9) -- node[msg, yshift=2pt] {encrypted packet} (0, -5.9);
+
+		% phases
+		\draw[phase] (\R+1.6, -0.8) -- (\R+1.6, -2.7) node[midway, phaselabel] {key exchange};
+		\draw[phase] (\R+1.6, -2.9) -- (\R+1.6, -4.3) node[midway, phaselabel] {authentication};
+		\draw[phase] (\R+1.6, -4.5) -- (\R+1.6, -6.3) node[midway, phaselabel] {tunnel};
+	\end{tikzpicture}
+	\caption{Abstract overview of IPsec.
+		Client and server first agree on a shared key, then authenticate each other, and finally exchange encrypted packets through the tunnel.
+		Thin arrows are unencrypted, thick and double arrows are encrypted.}
+	\label{fig:ipsec-overview}
+\end{figure}

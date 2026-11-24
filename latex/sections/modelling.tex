@@ -1,0 +1,63 @@
+% !TEX root = ../ipeesec.tex
+\section{Modelling of IPsec}\label{sec:modelling}
+
+\subsection{Key exchange}\label{sec:key-exchange}
+
+Regarding the key exchange using elliptic curve cryptography, the reader is invited to read through~\cite{happelEllipticCurvesF42022} for a quick introduction.
+Crucially, we will assume that a shared encryption algorithm $E_{p,q} : T \to S$ for a private key $p$ and a public key $q$ is chosen, together with a decryption algorithm $D_{p,q} : S \to T$ such that $D_{p,q} \circ E_{p,q} = \id_T$, making $D_{p,q}$ a retraction of the section $E_{p,q}$.
+
+After successfully establishing public and private keys and an encryption/decryption algorithm, we will model this as two tuples $(p_c, q_c), (p_s, q_s) : K^2$ for the private and public keys of the client and of the server respectively, together with $E : \Hom(K^2, \hom(T, S))$ and $D : \Hom(K^2, \hom(S, T))$.
+
+\subsection{Authentication}\label{sec:authentication}
+
+\todo[inline]{Needs to be written.}
+
+\subsection{The tunnel}\label{sec:tunnel}
+
+We are left modelling the traffic selector, which we will model as two relations $Q_c, Q_s \rightarrowtail \mathrm{IP\text{-}Range}$ for the client and server respectively, where
+\[
+	\mathrm{IP\text{-}Range} \cong [0, 2^{32} - 1] \cong [0, 2^{8} - 1]^4,
+	\qquad
+	a_1 \cdot 2^{24} + a_2 \cdot 2^{16} + a_3 \cdot 2^{8} + a_4 \;\mapsfrom\; (a_1, a_2, a_3, a_4),
+\]
+is commonly represented as
+\[
+	\mathrm{repr}_{\mathrm{IP}} : \mathrm{IP\text{-}Range} \to \mathrm{String},
+	\qquad
+	\mathrm{repr}_{\mathrm{IP}}(a_1, a_2, a_3, a_4) = a_1 \texttt{.} a_2 \texttt{.} a_3 \texttt{.} a_4,
+\]
+with each $a_i$ written in decimal, for example $\mathrm{repr}_{\mathrm{IP}}(10, 0, 1, 0) = \texttt{10.0.1.0}$.
+We can trivially convert these subobjects to their respective characteristic functions through the topos structure on $\Set$, yielding
+\[
+	\chi_{Q_c}, \chi_{Q_s} : \mathrm{IP\text{-}Range} \to \{\top, \bot\} \cong \Bool
+\]
+for the client and server respectively, which are exactly the classical filters.
+
+We will model the communication layer by first considering only streaming data from one party to the other without responses.
+For this, the topos of trees~\cite{birkedalFirstStepsSynthetic2012} is a natural semantic choice that provides us with a rich, well-known syntax.
+Crucially, by use of the later modality $\later$, we can encode the passage of time on the typing level, where each discrete time step in the communication is given by an ordinal number $t \in \omega = \{0 \le 1 \le 2 \le \dots\}$.
+
+Consider $\Str(A) = A \times \later \Str(A)$ for some data $A$ that the client intends to transmit.
+From now on, we will only consider the case of the client communicating to the server, as the other way around follows trivially.
+We first need a productive stream transformer, which obviously is given by lifting a morphism $f : A \to B$, where $B = \im E_{p_c, q_s}(A)$, first through the functoriality of the diagonal functor $\Delta : \Set \to \toposoftrees$ and then through the functoriality of $\Str$, yielding
+\[
+	\Str(\Delta f) : \Str(\Delta A) \to \Str(\Delta B).
+\]
+We next need a shim
+\[
+	\mathrm{shim} : \Str(B) \to \Str(B + 1),
+\]
+which represents the UDP transport layer, encoding possible data loss by use of the optional data type $B + 1$.
+Finally, the recipient can then decode the message (lossily) by lifting $D_{p_s, q_c}$ analogously to
+\[
+	\Str(D_{p_s, q_c} + 1) : \Str(B + 1) \to \Str(A + 1).
+\]
+
+How can we eliminate this loss, one may ask?
+This paves the way for us to consider \emph{bidirectional communication}.
+We will model this by passing over from $\omega$ to the first uncountable ordinal $\omega_1$, corresponding to the topos $\Set^{\omega_1^{\mathrm{op}}}$ of presheaves on $\omega_1$, and introducing a map
+\[
+	\mathrm{skip} : \omega_1 \to \omega_1, \qquad \mathrm{skip}(n) = \omega + n.
+\]
+This then allows us to encode finishing one stream transfer and having the recipient respond.
+We may in fact respond eagerly by performing $\mathrm{skip}$ at any given $t \in \omega_1$ which is not a limit ordinal.

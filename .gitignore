@@ -1,0 +1,12 @@
+# Lean / Lake build output and fetched dependencies (mathlib)
+/.lake
+
+# nix build output
+/result
+/.direnv
+
+# local Claude Code state
+/.claude/scheduled_tasks.lock
+/.claude/settings.local.json
+
+# LaTeX build output is ignored in latex/.gitignore
